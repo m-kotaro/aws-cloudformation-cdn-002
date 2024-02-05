@@ -1,1 +1,1 @@
-# m-kotaro-aws-cloudformation-cdn-002
+# aws-cloudformation-cdn-002
