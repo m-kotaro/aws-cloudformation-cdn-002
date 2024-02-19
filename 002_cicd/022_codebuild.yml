@@ -34,8 +34,6 @@ Resources:
             Action: "sts:AssumeRole"
       MaxSessionDuration: 3600
       ManagedPolicyArns:
-      - "arn:aws:iam::aws:policy/CloudFrontFullAccess"
-      - "arn:aws:iam::aws:policy/AmazonS3FullAccess"
       - "arn:aws:iam::aws:policy/CloudWatchEventsFullAccess"
       - "arn:aws:iam::aws:policy/CloudWatchFullAccess"
       - "arn:aws:iam::aws:policy/CloudWatchFullAccessV2"
@@ -48,7 +46,7 @@ Resources:
     DependsOn:
      - IAMRoleCodebuild
     Properties:
-      PolicyName: "MyInlinePolicy"
+      PolicyName: "inlinepolicy"
       Roles:
         - Ref: IAMRoleCodebuild
       PolicyDocument:
@@ -60,6 +58,12 @@ Resources:
             Resource: 
               - !Sub "arn:aws:s3:::s3-codepipeline-${CustomParameter001}"
               - !Sub "arn:aws:s3:::s3-codepipeline-${CustomParameter001}/*"
+              - !Sub "arn:aws:s3:::s3-${CustomParameter001}/*"
+              - !Sub "arn:aws:s3:::s3-${CustomParameter001}"
+          - Effect: "Allow"
+            Action:
+              - "cloudfront:CreateInvalidation"
+            Resource: "*"
 
   #-------------------------
   # CodeBuild::Project
@@ -74,71 +78,16 @@ Resources:
       Source: 
         BuildSpec: |
           version: 0.2
-          
-          #env:
-            #variables:
-                # key: "value"
-                # key: "value"
-            #parameter-store:
-                # key: "value"
-                # key: "value"
-            #secrets-manager:
-                # key: secret-id:json-key:version-stage:version-id
-                # key: secret-id:json-key:version-stage:version-id
-            #exported-variables:
-                # - variable
-                # - variable
-            #git-credential-helper: yes
-          #batch:
-            #fast-fail: true
-            #build-list:
-            #build-matrix:
-            #build-graph:
           phases:
-            #install:
-              #runtime-versions:
-                # name: version
-                # name: version
-              #commands:
-                # - command
-                # - command
-            #pre_build:
-              #commands:
-                # - command
-                # - command
             build:
               commands:
                 - echo build phase
                 - ls -l
                 - pwd
-                # - npm install
-                # - npm run docs:build
-                # - aws s3 sync ./dist s3://s3-vite-sample/ --delete
-                # - aws cloudfront create-invalidation --distribution-id AAAAAAA  --paths "/*"
-                # - command
-                # - command
-            #post_build:
-              #commands:
-                # - command
-                # - command
-          #reports:
-            #report-name-or-arn:
-              #files:
-                # - location
-                # - location
-              #base-directory: location
-              #discard-paths: yes
-              #file-format: JunitXml | CucumberJson
-          #artifacts:
-            #files:
-              # - location
-              # - location
-            #name: $(date +%Y-%m-%d)
-            #discard-paths: yes
-            #base-directory: location
-          #cache:
-            #paths:
-              # - paths
+                - npm install
+                - npm run docs:build
+                - aws s3 sync ./dist s3://$S3BUCKET_CONTENTS/ --delete
+                - aws cloudfront create-invalidation --distribution-id $CloudFrontDistributionID  --paths "/*"
         InsecureSsl: false
         Type: "CODEPIPELINE"
       Artifacts: 
@@ -158,6 +107,9 @@ Resources:
           - Name: "CloudFrontDistributionID"
             Type: "PLAINTEXT"
             Value: { Fn::ImportValue: !Sub "cloudfront-${CustomParameter001}" }
+          - Name: "S3BUCKET_CONTENTS"
+            Type: "PLAINTEXT"
+            Value: { Fn::ImportValue: !Sub "s3-${CustomParameter001}" }
       ServiceRole: !Ref IAMRoleCodebuild
       TimeoutInMinutes: 60
       QueuedTimeoutInMinutes: 480
@@ -174,3 +126,8 @@ Outputs:
     Description: "CodeBuild"
     Export:
       Name: !Sub "codebuild-${CustomParameter001}"
+  CodeBuildProjectArn:
+    Value: !GetAtt CodeBuildProject.Arn
+    Description: "CodeBuildProjectArn"
+    Export:
+      Name: !Sub "codebuild-${CustomParameter001}-arn"

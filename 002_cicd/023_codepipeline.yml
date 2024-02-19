@@ -9,7 +9,6 @@ Parameters:
   ConnectionArn:
     Type: "String"
     Description: "ConnectionArn"
-    Default: "hogehogehooge"
   FullRepositoryId:
     Type: "String"
     Description: "FullRepositoryId"
@@ -33,7 +32,6 @@ Resources:
       MaxSessionDuration: 3600
       ManagedPolicyArns:
         - "arn:aws:iam::aws:policy/service-role/AWSCodeStarServiceRole"
-        - "arn:aws:iam::aws:policy/AWSCodeBuildAdminAccess"
 
   #-------------------------
   # IAM::Policy
@@ -51,15 +49,28 @@ Resources:
           - Effect: "Allow"
             Action:
               - "s3:*"
-            Resource: 
+            Resource:
               - !Sub "arn:aws:s3:::s3-codepipeline-${CustomParameter001}"
               - !Sub "arn:aws:s3:::s3-codepipeline-${CustomParameter001}/*"
+          - Effect: "Allow"
+            Action:
+              - "codestar-connections:UseConnection"
+              - "codestar-connections:GetConnection"
+            Resource: "*"
+          - Effect: "Allow"
+            Action:
+              - "codebuild:*"
+            Resource:
+              -  { Fn::ImportValue: !Sub "codebuild-${CustomParameter001}-arn" }
 
   #-------------------------
   # CodePipeline::Pipeline
   #-------------------------
   CodePipelinePipeline:
     Type: "AWS::CodePipeline::Pipeline"
+    DependsOn:
+      - IAMRoleCodepipeline
+      - InlinePolicyCodePipeline
     Properties:
       Name: !Sub "codepipeline-${CustomParameter001}"
       RoleArn: !GetAtt IAMRoleCodepipeline.Arn
