@@ -1,0 +1,133 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "CodeBuild with IAM"
+
+Parameters:
+  CustomParameter001:
+    Type: "String"
+    Description: "This is custom-parameter."
+    Default: "hogehogehooge"
+
+Resources:
+  #-------------------------
+  # AWS::Logs::LogGroup
+  #-------------------------
+  MyLogGroup:
+    Type: "AWS::Logs::LogGroup"
+    Properties:
+      LogGroupName: !Sub "/aws/codebuild/codebuild-${CustomParameter001}"
+      RetentionInDays: 30
+
+  #-------------------------
+  # IAM::Role
+  #-------------------------
+  IAMRoleCodebuild:
+    Type: "AWS::IAM::Role"
+    Properties:
+      Path: "/"
+      RoleName: !Sub "role-codebuild-${CustomParameter001}"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: "Allow"
+            Principal:
+              Service: "codebuild.amazonaws.com"
+            Action: "sts:AssumeRole"
+      MaxSessionDuration: 3600
+      ManagedPolicyArns:
+      - "arn:aws:iam::aws:policy/CloudWatchEventsFullAccess"
+      - "arn:aws:iam::aws:policy/CloudWatchFullAccess"
+      - "arn:aws:iam::aws:policy/CloudWatchFullAccessV2"
+
+  #-------------------------
+  # IAM::Policy
+  #-------------------------
+  InlinePolicyCodebuild:
+    Type: "AWS::IAM::Policy"
+    DependsOn:
+     - IAMRoleCodebuild
+    Properties:
+      PolicyName: "inlinepolicy"
+      Roles:
+        - Ref: IAMRoleCodebuild
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: "Allow"
+            Action:
+              - "s3:*"
+            Resource: 
+              - !Sub "arn:aws:s3:::s3-codepipeline-${CustomParameter001}"
+              - !Sub "arn:aws:s3:::s3-codepipeline-${CustomParameter001}/*"
+              - !Sub "arn:aws:s3:::s3-${CustomParameter001}/*"
+              - !Sub "arn:aws:s3:::s3-${CustomParameter001}"
+          - Effect: "Allow"
+            Action:
+              - "cloudfront:CreateInvalidation"
+            Resource: "*"
+
+  #-------------------------
+  # CodeBuild::Project
+  #-------------------------
+  CodeBuildProject:
+    Type: "AWS::CodeBuild::Project"
+    DependsOn:
+     - IAMRoleCodebuild
+     - InlinePolicyCodebuild
+    Properties:
+      Name: !Sub "codebuild-${CustomParameter001}"
+      Source: 
+        BuildSpec: |
+          version: 0.2
+          phases:
+            build:
+              commands:
+                - echo build phase
+                - ls -l
+                - pwd
+                - npm install
+                - npm run docs:build
+                - aws s3 sync ./dist s3://$S3BUCKET_CONTENTS/ --delete
+                - aws cloudfront create-invalidation --distribution-id $CloudFrontDistributionID  --paths "/*"
+        InsecureSsl: false
+        Type: "CODEPIPELINE"
+      Artifacts: 
+        EncryptionDisabled: false
+        Name: !Sub "codebuild-${CustomParameter001}"
+        Packaging: "NONE"
+        Type: "CODEPIPELINE"
+      Cache: 
+        Type: "NO_CACHE"
+      Environment: 
+        ComputeType: "BUILD_GENERAL1_SMALL"
+        Image: "aws/codebuild/amazonlinux2-x86_64-standard:5.0"
+        ImagePullCredentialsType: "CODEBUILD"
+        PrivilegedMode: false
+        Type: "LINUX_CONTAINER"
+        EnvironmentVariables:
+          - Name: "CloudFrontDistributionID"
+            Type: "PLAINTEXT"
+            Value: { Fn::ImportValue: !Sub "cloudfront-${CustomParameter001}" }
+          - Name: "S3BUCKET_CONTENTS"
+            Type: "PLAINTEXT"
+            Value: { Fn::ImportValue: !Sub "s3-${CustomParameter001}" }
+      ServiceRole: !Ref IAMRoleCodebuild
+      TimeoutInMinutes: 60
+      QueuedTimeoutInMinutes: 480
+      EncryptionKey: !Sub "arn:aws:kms:${AWS::Region}:${AWS::AccountId}:alias/aws/s3"
+      BadgeEnabled: false
+      LogsConfig: 
+        CloudWatchLogs: 
+          Status: "ENABLED"
+      Visibility: "PRIVATE"
+
+Outputs:
+  CodeBuildProject:
+    Value: !Ref CodeBuildProject
+    Description: "CodeBuild"
+    Export:
+      Name: !Sub "codebuild-${CustomParameter001}"
+  CodeBuildProjectArn:
+    Value: !GetAtt CodeBuildProject.Arn
+    Description: "CodeBuildProjectArn"
+    Export:
+      Name: !Sub "codebuild-${CustomParameter001}-arn"

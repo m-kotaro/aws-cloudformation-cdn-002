@@ -1,0 +1,33 @@
+AWSTemplateFormatVersion: "2010-09-09"
+
+Parameters:
+  CustomParameter001:
+    Type: "String"
+    Description: "This is custom-parameter."
+    Default: "hogehogehooge"
+
+Resources:
+  # ------------------------------------------------------------#
+  # S3::Bucket
+  # ------------------------------------------------------------#
+  S3BucketPipeline:
+    Type: "AWS::S3::Bucket"
+    Properties:
+      BucketName: !Sub "s3-codepipeline-${CustomParameter001}"
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: True
+        BlockPublicPolicy: True
+        IgnorePublicAcls: True
+        RestrictPublicBuckets: True
+
+Outputs:
+  S3BucketPipeline:
+    Value: !Ref S3BucketPipeline
+    Description: "This s3 bucket for codepipeline."
+    Export:
+      Name: !Sub "s3-codepipeline-${CustomParameter001}"
+  S3BucketPipelineArn:
+    Value: !GetAtt S3BucketPipeline.Arn
+    Description: "This s3 bucket Arn for codepipeline."
+    Export:
+      Name: !Sub "s3-codepipeline-${CustomParameter001}-arn"

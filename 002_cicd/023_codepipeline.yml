@@ -1,0 +1,112 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: ""
+
+Parameters:
+  CustomParameter001:
+    Type: "String"
+    Description: "This is custom-parameter."
+    Default: "hogehogehooge"
+  ConnectionArn:
+    Type: "String"
+    Description: "ConnectionArn"
+  FullRepositoryId:
+    Type: "String"
+    Description: "FullRepositoryId"
+
+Resources:
+  #-------------------------
+  # IAM::Policy
+  #-------------------------
+  IAMRoleCodepipeline:
+    Type: "AWS::IAM::Role"
+    Properties:
+      Path: "/service-role/"
+      RoleName: !Sub "codepipeline-${CustomParameter001}"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: "Allow"
+            Principal:
+              Service: "codepipeline.amazonaws.com"
+            Action: "sts:AssumeRole"
+      MaxSessionDuration: 3600
+      ManagedPolicyArns:
+        - "arn:aws:iam::aws:policy/service-role/AWSCodeStarServiceRole"
+
+  #-------------------------
+  # IAM::Policy
+  #-------------------------
+  InlinePolicyCodePipeline:
+    Type: "AWS::IAM::Policy"
+    DependsOn: IAMRoleCodepipeline
+    Properties:
+      PolicyName: !Sub "policy-codepipeline-${CustomParameter001}"
+      Roles:
+        - !Ref IAMRoleCodepipeline
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: "Allow"
+            Action:
+              - "s3:*"
+            Resource:
+              - !Sub "arn:aws:s3:::s3-codepipeline-${CustomParameter001}"
+              - !Sub "arn:aws:s3:::s3-codepipeline-${CustomParameter001}/*"
+          - Effect: "Allow"
+            Action:
+              - "codestar-connections:UseConnection"
+              - "codestar-connections:GetConnection"
+            Resource: "*"
+          - Effect: "Allow"
+            Action:
+              - "codebuild:*"
+            Resource:
+              -  { Fn::ImportValue: !Sub "codebuild-${CustomParameter001}-arn" }
+
+  #-------------------------
+  # CodePipeline::Pipeline
+  #-------------------------
+  CodePipelinePipeline:
+    Type: "AWS::CodePipeline::Pipeline"
+    DependsOn:
+      - IAMRoleCodepipeline
+      - InlinePolicyCodePipeline
+    Properties:
+      Name: !Sub "codepipeline-${CustomParameter001}"
+      RoleArn: !GetAtt IAMRoleCodepipeline.Arn
+      ArtifactStore: 
+        Location: { Fn::ImportValue: !Sub "s3-codepipeline-${CustomParameter001}" }
+        Type: "S3"
+      Stages: 
+        - Name: "Source"
+          Actions: 
+            - Name: "Source"
+              ActionTypeId: 
+                Category: "Source"
+                Owner: "AWS"
+                Provider: "CodeStarSourceConnection"
+                Version: "1"
+              Configuration: 
+                BranchName: "main"
+                ConnectionArn: !Ref ConnectionArn
+                FullRepositoryId: !Ref FullRepositoryId
+                OutputArtifactFormat: "CODE_ZIP"
+              OutputArtifacts: 
+                - Name: "SourceArtifact"
+              Region: !Ref AWS::Region
+              Namespace: "SourceVariables"
+              RunOrder: 1
+        - Name: "Build"
+          Actions: 
+            - Name: "Build"
+              ActionTypeId: 
+                Category: "Test"
+                Owner: "AWS"
+                Provider: "CodeBuild"
+                Version: "1"
+              Configuration: 
+                ProjectName: { Fn::ImportValue: !Sub "codebuild-${CustomParameter001}" }
+              InputArtifacts: 
+                - Name: "SourceArtifact"
+              Region: !Ref AWS::Region
+              RunOrder: 1
