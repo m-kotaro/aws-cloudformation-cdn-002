@@ -59,6 +59,11 @@ Resources:
               - !Sub "arn:aws:s3:::s3-codepipeline-${CustomParameter001}"
               - !Sub "arn:aws:s3:::s3-codepipeline-${CustomParameter001}/*"
               - !Sub "arn:aws:s3:::s3-${CustomParameter001}/*"
+              - !Sub "arn:aws:s3:::s3-${CustomParameter001}"
+          - Effect: "Allow"
+            Action:
+              - "cloudfront:CreateInvalidation"
+            Resource: "*"
 
   #-------------------------
   # CodeBuild::Project
@@ -79,6 +84,10 @@ Resources:
                 - echo build phase
                 - ls -l
                 - pwd
+                - npm install
+                - npm run docs:build
+                - aws s3 sync ./dist s3://$S3BUCKET_CONTENTS/ --delete
+                - aws cloudfront create-invalidation --distribution-id $CloudFrontDistributionID  --paths "/*"
         InsecureSsl: false
         Type: "CODEPIPELINE"
       Artifacts: 
@@ -98,6 +107,9 @@ Resources:
           - Name: "CloudFrontDistributionID"
             Type: "PLAINTEXT"
             Value: { Fn::ImportValue: !Sub "cloudfront-${CustomParameter001}" }
+          - Name: "S3BUCKET_CONTENTS"
+            Type: "PLAINTEXT"
+            Value: { Fn::ImportValue: !Sub "s3-${CustomParameter001}" }
       ServiceRole: !Ref IAMRoleCodebuild
       TimeoutInMinutes: 60
       QueuedTimeoutInMinutes: 480
